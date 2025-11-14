@@ -1,0 +1,1 @@
+data <- read.csv('~/Advanced Ecology 1/group2.csv')
