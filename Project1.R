@@ -175,13 +175,28 @@ data2 <- data |>
 sum(data2$`sum(n)`)
 16745*0.75
 ###Black drum + Red drum + Atlantic Croaker + Blue Crab + Striped Mullet
+
 ###Alpha: Shannon, Simpson. Beta: Bray-Curtis, Jaccard
-df = unique(data[c("date")])
+###Per year
+library(dplyr)
+library(lubridate)
+
+data <- data %>%
+  mutate(date = mdy(date))
+data <- data %>%
+  mutate(year = year(date))
+annual_abundance <- data %>%
+  group_by(species, year) %>%
+  summarise(total_abundance = sum(n, na.rm = TRUE), .groups = "drop")
+
+df = unique(annual_abundance[c("year")])
 df$H = NA
+annual_abundance <- annual_abundance %>%
+  rename(abundance = total_abundance)
 for (i in 1:nrow(df)){
-  d = data |> filter(date == df$date[i],
-                        n > 0)
-  d = d |> count(species,wt = n) |> 
+  d = annual_abundance |> filter(year == df$year[i])
+  d = d |> 
+    count(species,wt = abundance) |> 
     mutate(pi = n/sum(n),
            ln_pi = log(pi),
            p_ln_pi = pi*ln_pi)
@@ -191,20 +206,16 @@ for (i in 1:nrow(df)){
 df |>
   summarise(mean_H = mean(H, na.rm = TRUE),
             sd_H = sd(H, na.rm = TRUE))
-###Per year?
-datayear <- data |>
-  mutate(year = lubridate::year(date)) |>
-  group_by(year) |>
-  summarize(total_value = sum(n, na.rm = TRUE))
-
-datayear <- aggregate(cbind(n)~month(date),
-                     data=data,FUN=sum)
-
-ggplot(df, aes(date, H)) +
+ggplot(df, aes(year, H)) +
   geom_line(linewidth = 1)+ 
   geom_point() +
   labs(x = 'Date',
        y = 'Shannon Diversity')+
   theme_bw()
+
+###Richness
+for (i in 1:nrow(df)){
+  d = annual_abundance |> filter(year == df$year[i])
+  d = d |>
 ##3 – Using a community trajectory analysis, assess the annual stability of the fish community across the 
 ##sites from the assigned basin and gear type. Describe and discuss the main results.
