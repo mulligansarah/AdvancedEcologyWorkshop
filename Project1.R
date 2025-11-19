@@ -246,6 +246,31 @@ ggplot(df, aes(year, inv)) +
   theme_bw()
 
 mean(df$inv)
+### 
+data_w <- data |>
+  group_by(year, species) |>            
+  summarise(total_n = sum(n), .groups="drop") |>
+  pivot_wider(names_from = species, values_from = total_n, values_fill = 0)
+comm <- data_w |> 
+  summarise(across(`Black Drum`:`White Shrimp`, mean))
 
+jacdist <- vegdist(data_w, method = "jaccard")
+nmds.jc <- metaMDS(data_w, distance = "jaccard", k = 2, try = 100)
+nmds.jc
+braydist = vegdist(data_w, method = "bray")
+braydist
+nmds.bc = metaMDS(data_w, distance = "bray", k = 2, try = 100)
+nmds_output = bind_rows(bc = data.frame(nmds.bc[["points"]]),
+                        jc = data.frame(nmds.jc[["points"]])) |> 
+  mutate(year = rep(unique(data_w$year), times = 2),
+         Dissimilarity = rep(c("Bray", "Jaccard"),
+                             each = length(unique(year))))
+
+ggplot(nmds_output, aes(MDS1, MDS2, color = as.factor(year)))+
+  geom_point(size = 4)+ 
+  facet_wrap(~Dissimilarity)+
+  labs(color = 'year')+
+  scale_color_viridis_d(option = 'turbo')+
+  theme_bw()
 ##3 – Using a community trajectory analysis, assess the annual stability of the fish community across the 
 ##sites from the assigned basin and gear type. Describe and discuss the main results.
