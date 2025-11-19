@@ -176,6 +176,7 @@ sum(data2$`sum(n)`)
 16745*0.75
 ###Black drum + Red drum + Atlantic Croaker + Blue Crab + Striped Mullet
 
+sp75 <- c('Black Drum', 'Red Drum', 'Atlantic Croaker', 'Blue Crab', 'Striped Mullet')
 ###Alpha: Shannon, Simpson. Beta: Bray-Curtis, Jaccard
 ###Per year
 library(dplyr)
@@ -188,6 +189,8 @@ data <- data %>%
 annual_abundance <- data %>%
   group_by(species, year) %>%
   summarise(total_abundance = sum(n, na.rm = TRUE), .groups = "drop")
+annual_abundance <- annual_abundance |>
+  filter(species %in% sp75)
 
 df = unique(annual_abundance[c("year")])
 df$H = NA
@@ -213,9 +216,36 @@ ggplot(df, aes(year, H)) +
        y = 'Shannon Diversity')+
   theme_bw()
 
-###Richness
+df$d <- NA
 for (i in 1:nrow(df)){
   d = annual_abundance |> filter(year == df$year[i])
-  d = d |>
+  d = d |> count(species,wt = abundance) |> 
+    mutate(pi = n/sum(n))
+  
+  df$d[i] = sum(d$pi^2)
+}
+
+df$even <- NA
+df$inv <- NA
+for(i in 1:nrow(df)){
+df$even[i] = 1 - df$d[i]
+df$inv[i] = 1/df$d[i]}
+
+ggplot(df, aes(year, d)) +
+  geom_line(linewidth = 1)+ 
+  geom_point() +
+  labs(x = 'Date',
+       y = 'Simpson Diversity')+
+  theme_bw()
+
+ggplot(df, aes(year, inv)) +
+  geom_line(linewidth = 1)+ 
+  geom_point() +
+  labs(x = 'Date',
+       y = 'Inverse Simpson Diversity')+
+  theme_bw()
+
+mean(df$inv)
+
 ##3 – Using a community trajectory analysis, assess the annual stability of the fish community across the 
 ##sites from the assigned basin and gear type. Describe and discuss the main results.
