@@ -16,7 +16,6 @@ species_abundance <- data |>
 top3species <- species_abundance$species[1:3]
 top3species
 
-# top 3 species over time
 data_over_time <- data |>
   filter(species %in% top3species) |>
   group_by(species, date) |>
@@ -33,7 +32,7 @@ ggplot(data_over_time, aes(x = date, y = N, color = species)) +
        y = "Abundance",
        color = "Species")
 
-#Density-independent
+###Density-independent
 data_w_lambda <- data_over_time |>
   arrange(species, date) |>
   mutate(lambda = lead(N)/N)
@@ -86,7 +85,7 @@ ggplot(sim, aes(x = year, y = projection, color = species)) +
   labs(x = "Years", y = "Projected Abundance", color = "Species") +
   theme_bw()
 
-#Density-dependent
+###Density-dependent
 years <- 30
 pop2 <- data_w_lambda |>
   group_by(species) |>
@@ -147,9 +146,65 @@ ggplot(sim2, aes(x = year, y = projection, color = species)) +
 
 #Section 2
 ##1 – Does the sampling assigned to your group reach the asymptote of the species accumulation curve? Discuss results.
+Rare <- data |> 
+  group_by(date) |> 
+  ungroup()
+sp_rare  <- unique(Rare$species)
+sp_rare_tib = tibble(n_samp = 1:length(sp_rare), n_spp = NA)
+for (i in 1:length(sp_rare)){
+  # sample ID to include
+  samp = sp_rare[1:i]
+  # include only sample numbers 
+  d = Rare |> 
+    filter(species %in% samp,
+           n > 0)
+  sp_rare_tib$n_spp[i] = length(unique(d$species))
+}
+ggplot(sp_rare_tib, aes(n_samp, n_spp))+
+  geom_line(linewidth = 1)+
+  labs(x = 'Number of Samples',
+       y = 'Number of Species')+
+  theme_bw()
+###Need help from Santos - why is this not working?
 
 ##2 - Using the species that composed 75% of the abundance of species within the nektonic community, assess 
 ##the annual trends of alpha and beta diversity, and the inverse Simpson diversity index.
+data2 <- data |>
+  group_by(species) |>
+  summarise(sum(n))
+sum(data2$`sum(n)`)
+16745*0.75
+###Black drum + Red drum + Atlantic Croaker + Blue Crab + Striped Mullet
+###Alpha: Shannon, Simpson. Beta: Bray-Curtis, Jaccard
+df = unique(data[c("date")])
+df$H = NA
+for (i in 1:nrow(df)){
+  d = data |> filter(date == df$date[i],
+                        n > 0)
+  d = d |> count(species,wt = n) |> 
+    mutate(pi = n/sum(n),
+           ln_pi = log(pi),
+           p_ln_pi = pi*ln_pi)
+  
+  df$H[i] = -sum(d$p_ln_pi)
+}
+df |>
+  summarise(mean_H = mean(H, na.rm = TRUE),
+            sd_H = sd(H, na.rm = TRUE))
+###Per year?
+datayear <- data |>
+  mutate(year = lubridate::year(date)) |>
+  group_by(year) |>
+  summarize(total_value = sum(n, na.rm = TRUE))
 
+datayear <- aggregate(cbind(n)~month(date),
+                     data=data,FUN=sum)
+
+ggplot(df, aes(date, H)) +
+  geom_line(linewidth = 1)+ 
+  geom_point() +
+  labs(x = 'Date',
+       y = 'Shannon Diversity')+
+  theme_bw()
 ##3 – Using a community trajectory analysis, assess the annual stability of the fish community across the 
 ##sites from the assigned basin and gear type. Describe and discuss the main results.
