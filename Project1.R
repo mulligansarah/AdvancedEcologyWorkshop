@@ -2,6 +2,7 @@ data <- read.csv('~/AdvancedEcologyWorkshop/group2.csv')
 library(tidyverse)
 library('dplyr')
 library('DescTools')
+
 library('vegan')
 library(ggplot2)
 #Section 1
