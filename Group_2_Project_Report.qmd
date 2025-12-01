@@ -205,6 +205,8 @@ ggplot(sim2, aes(x = year, y = projection, color = species)) +
 
 ## What can you infer from both models (Modeli \| Speciesi)? For each species, what is the most proper model to assess their growth? Why?
 
-a;skldjf;a
+(answer)
 
 ## 1.2 Based on the selected models, how does lambda change over time?
+
+(answer)
