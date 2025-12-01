@@ -2,7 +2,6 @@ data <- read.csv('~/AdvancedEcologyWorkshop/group2.csv')
 library(tidyverse)
 library('dplyr')
 library('DescTools')
-
 library('vegan')
 library(ggplot2)
 #Section 1
@@ -151,13 +150,14 @@ Rare <- data |>
   group_by(date) |> 
   ungroup()
 sp_rare  <- unique(Rare$species)
-sp_rare_tib = tibble(n_samp = 1:length(sp_rare), n_spp = NA)
-for (i in 1:length(sp_rare)){
+yr_rare <- unique(data$date)
+sp_rare_tib = tibble(n_samp = 1:length(yr_rare), n_spp = NA)
+for (i in 1:length(yr_rare)){
   # sample ID to include
-  samp = sp_rare[1:i]
+  samp = yr_rare[1:i]
   # include only sample numbers 
-  d = Rare |> 
-    filter(species %in% samp,
+  d = data |> 
+    filter(date %in% samp,
            n > 0)
   sp_rare_tib$n_spp[i] = length(unique(d$species))
 }
@@ -166,7 +166,7 @@ ggplot(sp_rare_tib, aes(n_samp, n_spp))+
   labs(x = 'Number of Samples',
        y = 'Number of Species')+
   theme_bw()
-###Need help from Santos - why is this not working?
+
 
 ##2 - Using the species that composed 75% of the abundance of species within the nektonic community, assess 
 ##the annual trends of alpha and beta diversity, and the inverse Simpson diversity index.
