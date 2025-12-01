@@ -5,7 +5,7 @@ editor: visual
 author: Danni Cox, Sophia Hemsi, Sarah Mulligan, 
 ---
 
-## 1.1 Use a discrete density-dependent and -independent population model to assess the population growth dynamics of any three species within the 10 most abundant species. 
+## 1.1 Use a discrete density-dependent and -independent population model to assess the population growth dynamics of any three species within the 10 most abundant species.
 
 ```{r}
 
@@ -13,6 +13,8 @@ library('tidyverse')
 library('dplyr')
 library('DescTools')
 library('vegan')
+library('ggplot2')
+library('lubridate')
 
 data <- read_csv('/Users/danni/OneDrive/Desktop/Grad School/R Workshop/group2.csv')
 
@@ -210,3 +212,131 @@ ggplot(sim2, aes(x = year, y = projection, color = species)) +
 ## 1.2 Based on the selected models, how does lambda change over time?
 
 (answer)
+
+## 2.1 Does the sampling assigned to your group reach the asymptote of the species accumulation curve? Discuss results.
+
+```{r}
+Rare <- data |> 
+  group_by(date) |> 
+  ungroup()
+sp_rare  <- unique(Rare$species)
+yr_rare <- unique(data$date)
+sp_rare_tib = tibble(n_samp = 1:length(yr_rare), n_spp = NA)
+for (i in 1:length(yr_rare)){
+  # sample ID to include
+  samp = yr_rare[1:i]
+  # include only sample numbers 
+  d = data |> 
+    filter(date %in% samp,
+           n > 0)
+  sp_rare_tib$n_spp[i] = length(unique(d$species))
+}
+ggplot(sp_rare_tib, aes(n_samp, n_spp))+
+  geom_line(linewidth = 1)+
+  labs(x = 'Number of Samples',
+       y = 'Number of Species')+
+  theme_bw()
+```
+
+(Answer)
+
+## 2.2 Using the species that composed 75% of the abundance of species within the nektonic community, assess the annual trends of alpha and beta diversity, and the inverse Simpson diversity index.
+
+```{r}
+data2 <- data |>
+  group_by(species) |>
+  summarise(sum(n))
+sum(data2$`sum(n)`)
+16745*0.75
+sp75 <- c('Black Drum', 'Red Drum', 'Atlantic Croaker', 'Blue Crab', 'Striped Mullet')
+data <- data %>%
+  mutate(date = mdy(date))
+data <- data %>%
+  mutate(year = year(date))
+annual_abundance <- data %>%
+  group_by(species, year) %>%
+  summarise(total_abundance = sum(n, na.rm = TRUE), .groups = "drop")
+annual_abundance <- annual_abundance |>
+  filter(species %in% sp75)
+
+df = unique(annual_abundance[c("year")])
+df$H = NA
+annual_abundance <- annual_abundance %>%
+  rename(abundance = total_abundance)
+for (i in 1:nrow(df)){
+  d = annual_abundance |> filter(year == df$year[i])
+  d = d |> 
+    count(species,wt = abundance) |> 
+    mutate(pi = n/sum(n),
+           ln_pi = log(pi),
+           p_ln_pi = pi*ln_pi)
+  
+  df$H[i] = -sum(d$p_ln_pi)
+}
+df |>
+  summarise(mean_H = mean(H, na.rm = TRUE),
+            sd_H = sd(H, na.rm = TRUE))
+ggplot(df, aes(year, H)) +
+  geom_line(linewidth = 1)+ 
+  geom_point() +
+  labs(x = 'Date',
+       y = 'Shannon Diversity')+
+  theme_bw()
+
+df$d <- NA
+for (i in 1:nrow(df)){
+  d = annual_abundance |> filter(year == df$year[i])
+  d = d |> count(species,wt = abundance) |> 
+    mutate(pi = n/sum(n))
+  
+  df$d[i] = sum(d$pi^2)
+}
+
+df$even <- NA
+df$inv <- NA
+for(i in 1:nrow(df)){
+df$even[i] = 1 - df$d[i]
+df$inv[i] = 1/df$d[i]}
+
+ggplot(df, aes(year, d)) +
+  geom_line(linewidth = 1)+ 
+  geom_point() +
+  labs(x = 'Date',
+       y = 'Simpson Diversity')+
+  theme_bw()
+
+ggplot(df, aes(year, inv)) +
+  geom_line(linewidth = 1)+ 
+  geom_point() +
+  labs(x = 'Date',
+       y = 'Inverse Simpson Diversity')+
+  theme_bw()
+
+mean(df$inv)
+
+data_w <- data |>
+  group_by(year, species) |>            
+  summarise(total_n = sum(n), .groups="drop") |>
+  pivot_wider(names_from = species, values_from = total_n, values_fill = 0)
+comm <- data_w |> 
+  summarise(across(`Black Drum`:`White Shrimp`, mean))
+
+jacdist <- vegdist(data_w, method = "jaccard")
+nmds.jc <- metaMDS(data_w, distance = "jaccard", k = 2, try = 100)
+nmds.jc
+braydist = vegdist(data_w, method = "bray")
+braydist
+nmds.bc = metaMDS(data_w, distance = "bray", k = 2, try = 100)
+nmds_output = bind_rows(bc = data.frame(nmds.bc[["points"]]),
+                        jc = data.frame(nmds.jc[["points"]])) |> 
+  mutate(year = rep(unique(data_w$year), times = 2),
+         Dissimilarity = rep(c("Bray", "Jaccard"),
+                             each = length(unique(year))))
+
+ggplot(nmds_output, aes(MDS1, MDS2, color = as.factor(year)))+
+  geom_point(size = 4)+ 
+  facet_wrap(~Dissimilarity)+
+  labs(color = 'year')+
+  scale_color_viridis_d(option = 'turbo')+
+  theme_bw()
+```
