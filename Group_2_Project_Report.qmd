@@ -10,13 +10,14 @@ author: Danni Cox, Sophia Hemsi, Sarah Mulligan,
 ```{r}
 
 library('tidyverse')
+library('tidyr')
 library('dplyr')
 library('DescTools')
 library('vegan')
 library('ggplot2')
 library('lubridate')
 
-data <- read_csv('/Users/danni/OneDrive/Desktop/Grad School/R Workshop/group2.csv')
+data <- read_csv('~/AdvancedEcologyWorkshop/group2.csv')
 
 # Identify top 3 species
 
@@ -107,7 +108,7 @@ for(i in 1:nrow(pop)) {
   Species <- pop$species[i]
   N0 <- pop$N_0[i]
   lambda <- pop$mean_lambda[i]
-  t0 <- pop$t_0[i]
+  t0 <- as.Date(pop$t_0[i])   # <-- FIXED
   
   N <- numeric(years + 1)
   N[1] <- N0
@@ -120,12 +121,10 @@ for(i in 1:nrow(pop)) {
     species = Species,
     year = 0:years,
     projection = N,
-    t_i = t0 + years(0:years)
+    t_i = t0 + years(0:years)  # works now
   )
-
-sim <- bind_rows(sim, projected_pop)
-
   
+  sim <- bind_rows(sim, projected_pop)
 }
 
 sim
@@ -165,7 +164,7 @@ for(i in 1:nrow(pop2)) {
   N0 <- pop2$N_0[i]
   rd <- pop2$rd[i]
   K <- pop2$K[i]
-  t0 <- pop2$t_0[i]
+  t0 <- as.Date(pop2$t_0[i])   # <-- FIXED
   
   N <- numeric(years + 1)
   N[1] <- N0
@@ -175,14 +174,14 @@ for(i in 1:nrow(pop2)) {
     
     if (N[t + 1] < 0) {
       N[t + 1] <- 0
+    }
   }
-}
 
   projected_pop2 <- tibble(
     species = Species,
     year = 0:years,
     projection = N,
-    t_i = t0 + years(0:years),
+    t_i = t0 + years(0:years),   # works now
     K = K,
     rd = rd
   )
