@@ -2,10 +2,10 @@
 title: "Group 2 Project Report"
 format: pdf
 editor: visual
-author: Danni Cox, Sophia Hemsi, Sarah Mulligan, 
+author: Danni Cox, Sophia Hemsi, Sarah Mulligan
 ---
 
-## 1.1 Use a discrete density-dependent and -independent population model to assess the population growth dynamics of any three species within the 10 most abundant species.
+## 1.1a Use a discrete density-dependent and -independent population model to assess the population growth dynamics of any three species within the 10 most abundant species.
 
 ```{r}
 
@@ -17,7 +17,7 @@ library('vegan')
 library('ggplot2')
 library('lubridate')
 
-data <- read_csv('~/AdvancedEcologyWorkshop/group2.csv')
+data <- read_csv('group2.csv')
 
 # Identify top 3 species
 
@@ -33,31 +33,36 @@ top3species
 
 data$lambda = NA
 
-# top 3 species over time
+# Plot top 3 species over time
 
 data_over_time <- data |>
   filter(species %in% top3species) |>
-  group_by(species, date) |>
-  summarise(N = sum(n, na.rm = T)) |>
-  arrange(species, date) |>
+  mutate(date = as.Date(date, format = "%m/%d/%Y"),
+         year = year(date)) |> 
+  group_by(species, year) |>
+  summarise(N = sum(n, na.rm = T),
+            avg_N = n(),
+            .groups = "drop") |>
+  arrange(species, year) |>
   ungroup()
 
-ggplot(data_over_time, aes(x = date, y = N, color = species)) +
+ggplot(data_over_time, aes(x = year, y = N, color = species)) +
   geom_point() +
   geom_line() +
   labs(title = "Abundance of Top 3 Species Over Time",
-       x = "Date",
+       x = "Year",
        y = "Abundance",
        color = "Species") +
+ 
   theme_bw()
 ```
 
 ```{r}
 
-# density independent model
+# Density-independent model
 
 data_w_lambda <- data_over_time |>
- arrange(species, date) |>
+ arrange(species, year) |>
    mutate(lambda = lead(N)/N)
 
 avg_lambda <- data_w_lambda |>
@@ -69,13 +74,13 @@ avg_lambda <- data_w_lambda |>
 
 avg_lambda
 
-# lambda over time
+# Plot lambda over time
 
 ggplot(data_w_lambda |> filter(!is.na(lambda)),
-       aes(x = date, y = lambda, color = species)) +
+       aes(x = year, y = lambda, color = species)) +
   geom_point() +
   geom_line() +
-  labs(title = "Lambda Over Time", x = "Date", y = "Lambda", color = "Species") +
+  labs(title = "Lambda Over Time", x = "Year", y = "Lambda", color = "Species") +
   theme_bw()
 
 trends <- avg_lambda |>
@@ -92,14 +97,14 @@ trends
 
 ```{r}
 
-# project the population - density independent model
+# Project the population (density-independent model)
 
-years <- 2000
+years <- 100
 
 pop <- data_w_lambda |>
   group_by(species) |>
-  slice_max(date, n = 1) |>
-  select(species, N_0 = N, t_0 = date) |>
+  slice_max(year, n = 1) |>
+  select(species, N_0 = N, t_0 = year) |>
   left_join(avg_lambda, by = "species")
 
 sim <- tibble()
@@ -108,7 +113,7 @@ for(i in 1:nrow(pop)) {
   Species <- pop$species[i]
   N0 <- pop$N_0[i]
   lambda <- pop$mean_lambda[i]
-  t0 <- as.Date(pop$t_0[i])   # <-- FIXED
+  t0 <- as.Date(pop$t_0[i])   
   
   N <- numeric(years + 1)
   N[1] <- N0
@@ -121,7 +126,7 @@ for(i in 1:nrow(pop)) {
     species = Species,
     year = 0:years,
     projection = N,
-    t_i = t0 + years(0:years)  # works now
+    t_i = t0 + years(0:years)  
   )
   
   sim <- bind_rows(sim, projected_pop)
@@ -131,6 +136,8 @@ sim
 
 ggplot(sim, aes(x = year, y = projection, color = species)) +
   geom_line() +
+  facet_wrap(~species, scales = "free_y") +
+  scale_y_continuous(labels = scales::comma) +
   labs(title = "Abundance of Top 3 Species Using a\nDensity-Independent Population Model",
        x = "Years", y = "Projected Abundance", color = "Species") +
   theme_bw()
@@ -138,33 +145,63 @@ ggplot(sim, aes(x = year, y = projection, color = species)) +
 
 ```{r}
 
-# density-dependent model
-
-years <- 10000
+# Estimate K for density-dependent model
 
 pop2 <- data_w_lambda |>
   group_by(species) |>
-  slice_max(date, n = 1) |>
-  select(species, N_0 = N, t_0 = date) |>
+  slice_max(year, n = 1) |>
+  select(species, N_0 = N, t_0 = year) |>
   left_join(avg_lambda, by = "species") |>
   mutate(rd = mean_lambda - 1)
 
-K_estimate <- data_over_time |>
-  group_by(species) |>
-    summarise(K = max(N, na.rm = T))
+K_estimates <- tibble()
 
+for(sp in top3species) {
+  species_data <- data_over_time |>
+    filter(species == sp) |>
+    arrange(year) |>
+    mutate(
+      Nt = lead(N),
+      change_in_N = (Nt - N) / N) |>
+        filter(!is.na(change_in_N), is.finite(change_in_N))
+      
+      model <- lm(change_in_N ~ N, data = species_data)
+      
+      intercept <- coef(model)[1]
+      
+      slope <- coef(model)[2]
+      
+      if(slope < 0) {
+        K_est <- -intercept / slope
+        method <- "regression"
+      } else {
+        K_est <- max(species_data$N, na.rm = T) * 3
+        method <- "max plus buffer"
+      }
+      
+      K_estimates <- bind_rows(K_estimates,
+                               tibble(species = sp,
+                                      K = K_est,
+                                      method = method))
+}
+
+# Project the population (density-dependent model)
 
 pop2 <- pop2 |>
-  left_join(K_estimate, by = "species")
+  left_join(K_estimates, by = "species")
+
+pop2
 
 sim2 <- tibble()
+
+years <- 1000
 
 for(i in 1:nrow(pop2)) {
   Species <- pop2$species[i]
   N0 <- pop2$N_0[i]
   rd <- pop2$rd[i]
-  K <- pop2$K[i]
-  t0 <- as.Date(pop2$t_0[i])   # <-- FIXED
+  K <- pop2$K[i] 
+  t0 <- pop2$t_0[i]   
   
   N <- numeric(years + 1)
   N[1] <- N0
@@ -181,7 +218,7 @@ for(i in 1:nrow(pop2)) {
     species = Species,
     year = 0:years,
     projection = N,
-    t_i = t0 + years(0:years),   # works now
+    t_i = t0 + years(0:years),  
     K = K,
     rd = rd
   )
@@ -201,16 +238,100 @@ ggplot(sim2, aes(x = year, y = projection, color = species)) +
     y = "Projected Abundance",
     color = "Species"
   ) +
+    facet_wrap(~species, scales = "free_y", ncol = 1) +
+  scale_y_continuous(labels = scales::comma) +
   theme_bw()
+
 ```
 
-## What can you infer from both models (Modeli \| Speciesi)? For each species, what is the most proper model to assess their growth? Why?
+## 1.1b What can you infer from both models (Modeli \| Speciesi)? For each species, what is the most proper model to assess their growth? Why?
 
-(answer)
+```{r}
+
+# Summary table comparing both models
+
+comparison_table <- pop2 |>
+  select(species, N_0, rd, K, method) |>
+  left_join(
+    avg_lambda |> select(species, mean_lambda),
+    by = "species"
+  ) |>
+  mutate(
+    lambda_trend = case_when(
+      mean_lambda > 1.0 ~ "Growing",
+      mean_lambda < 1.0 ~ "Declining",
+      TRUE ~ "Stable"
+    ),
+    density_dependent_trend = case_when(
+      N_0 < K & rd > 0 ~ "Growing toward K",
+      N_0 < K & rd < 0 ~ "Declining toward zero",
+      N_0 > K ~ "Declining toward K",
+      N_0 == K ~ "At equilibrium",
+      TRUE ~ "Complex"
+    )
+  )
+
+comparison_table
+```
+
+Density-independent models assume unlimited resources and constant lambda. Based on this model, Black Drum and Spotted Seatrout grew exponetially, while Gizzard Shad showed exponential decline.
+
+The density-dependent model incorporates an estimate of carrying capacity (K), which represents resource limitations. Black Drum grew in a sigmoidal pattern, growing exponentially until nearing carrying capacity and reaching a stable state. Spotted Seatrout did the same, but it takes almost ten times as long to see that trend due to the smaller rd value. Gizzard Shad decrease to zero similarly to how they do with a density-independent model, but reaching zero takes much less time with the density-dependent model.
+
+Because Black Drum and Spotted Seatrout reached their carrying capacitites, density-dependent effects are likely important, meaning a density-dependent model will work best to project the populations of these two species. Conversely, because Gizzard Shad decreased to zero (away from K) in both cases, a density-independent model works to assess the population growth of this species.
 
 ## 1.2 Based on the selected models, how does lambda change over time?
 
-(answer)
+```{r}
+
+# Density-independent lambda over time
+
+sim_with_lambda <- sim |>
+  arrange(species, year) |>
+  group_by(species) |>
+  mutate(
+    lambda_realized = lead(projection) / projection
+  ) |>
+  ungroup()
+
+ggplot(sim_with_lambda |> filter(!is.na(lambda_realized), year <= 100),
+       aes(x = year, y = lambda_realized, color = species)) +
+  geom_line(linewidth = 1) +
+  geom_hline(yintercept = 1, linetype = "dashed", color = "black") +
+  facet_wrap(~species, scales = "free_y", ncol = 1) +
+  labs(
+    title = "Lambda Over Time, Density-Independent Model",
+    x = "Years",
+    y = "Lambda"
+  ) +
+  theme_bw()
+  
+
+# Density-dependent lambda over time
+
+sim2_with_lambda <- sim2 |>
+  arrange(species, year) |>
+  group_by(species) |>
+  mutate(
+    lambda_realized = lead(projection) / projection
+  ) |>
+  ungroup()
+
+ggplot(sim2_with_lambda |> filter(!is.na(lambda_realized), year <= 1000),
+       aes(x = year, y = lambda_realized, color = species)) +
+  geom_line(linewidth = 1) +
+  geom_hline(yintercept = 1, linetype = "dashed", color = "black") +
+  facet_wrap(~species, scales = "free_y", ncol = 1) +
+  labs(
+    title = "Lambda Over Time, Density-Dependent Model",
+    x = "Years",
+    y = "Lambda"
+  ) +
+  theme_bw()
+  
+```
+
+In a density-independent model, lambda is constant. However, in a density-dependent model, the trends in lambda decreased in a sigmoidal fashion towards 1 for Black Drum and Spotted Seatrout, while for Gizzard Shad, lambda started below one and decreased exponentially until leveling out.
 
 ## 2.1 Does the sampling assigned to your group reach the asymptote of the species accumulation curve? Discuss results.
 
