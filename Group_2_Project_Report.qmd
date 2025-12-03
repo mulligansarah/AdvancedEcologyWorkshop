@@ -1,6 +1,6 @@
 ---
 title: "Group 2 Project Report"
-format: pdf
+format: html
 editor: visual
 author: Danni Cox, Sophia Hemsi, Sarah Mulligan, 
 ---
@@ -16,6 +16,7 @@ library('DescTools')
 library('vegan')
 library('ggplot2')
 library('lubridate')
+library('ecotraj')
 
 data <- read_csv('~/AdvancedEcologyWorkshop/group2.csv')
 
@@ -339,3 +340,26 @@ ggplot(nmds_output, aes(MDS1, MDS2, color = as.factor(year)))+
   scale_color_viridis_d(option = 'turbo')+
   theme_bw()
 ```
+
+## 2.2 Using a community trajectory analysis, assess the annual stability of the fish community across the sites from the assigned basin and gear type. Describe and discuss the main results.
+
+```{r}
+data$site <- as.integer(factor(data$lat))
+data_w2 <- data |>
+  pivot_wider(names_from = species,
+    values_from = n,
+    values_fill = 0)
+comm_matrix <- data_w2 |> select(-year, -basin, -date, -lat, -lon, -gear, -sci_name, -site)
+site <- data$site
+survey = data$year
+b_dist <- vegdist(comm_matrix, method = "bray", na.rm = TRUE)
+d <- defineTrajectories(b_dist, sites = site, surveys = survey)
+trajectoryPCoA(d,
+  traj.colors = c("black","red", "blue", 'lightblue3', 'purple', 'pink'),
+  lwd = 3,
+  survey.labels = FALSE)
+legend("bottomleft", col=c("black","red", "blue", 'lightblue3', 'purple', 'pink'), 
+       legend=unique(data$site), bty="n", lty=1, lwd = 2)
+```
+
+(Answer)
