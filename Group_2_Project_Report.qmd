@@ -17,6 +17,8 @@ library('vegan')
 library('ggplot2')
 library('lubridate')
 library('ecotraj')
+library('purrr')
+
 
 data <- read_csv('group2.csv')
 
@@ -617,3 +619,4 @@ legend("bottomleft", col=c("black","red", "blue", 'lightblue3', 'purple', 'pink'
 ```
 
 (Answer)
+
