@@ -336,6 +336,129 @@ In a density-independent model, lambda is constant. However, in a density-depend
 
 ## 1.3 Starting with the average abundance in 2000, perform a simulation (N = 100 replicates) of population growth using the growth variability based on the abundance values from start to 1999... How many times are the real abundance values intercepted by the uncertainty bounds of the simulation? Briefly discuss the performance of the models and potential reasons for the results.
 
+```{r}
+simulate_growth <- function(sp, start_year = 2000, n_sims = 100) {
+  
+  # Species-specific time series
+  df_sp <- annual %>% 
+    filter(species == sp, total_n > 0) %>%
+    arrange(year)
+  
+  # Early period: from beginning of the time series up to 1999
+  df_early <- df_sp %>% filter(year < start_year)
+  
+  # Late period: 2000 onwards (what we want to project and compare)
+  df_late  <- df_sp %>% filter(year >= start_year)
+  
+  # Need at least two years in early period to compute lambda
+  if (nrow(df_early) < 2) {
+    stop(paste("Not enough early data to compute lambda for species:", sp))
+  }
+  
+  # Compute empirical lambda from early period (growth variability)
+  df_early <- df_early %>%
+    mutate(
+      Nt  = total_n,
+      Nt1 = lead(Nt),
+      lambda = Nt1 / Nt
+    ) %>%
+    filter(!is.na(lambda))
+  
+  lambda_dist <- df_early$lambda
+  
+  if (length(lambda_dist) == 0) {
+    stop(paste("No valid lambdas for early period for species:", sp))
+  }
+  
+  # Starting value: average abundance in start_year (e.g., 2000)
+  startN <- df_sp %>% 
+    filter(year == start_year) %>%
+    summarise(meanN = mean(total_n)) %>%
+    pull()
+  
+  if (length(startN) == 0 || is.na(startN)) {
+    stop(paste("No data for start year", start_year, "for species:", sp))
+  }
+  
+  years_proj <- df_late$year
+  n_years    <- length(years_proj)
+  
+  # Matrix of simulations: rows = years, cols = replicates
+  N_mat <- matrix(NA_real_, nrow = n_years, ncol = n_sims)
+  N_mat[1, ] <- startN
+  
+  # Project forward using random draws from the early λ distribution
+  for (t in 2:n_years) {
+    # draw a λ for each replicate at this time step
+    lambdas_t <- sample(lambda_dist, n_sims, replace = TRUE)
+    N_mat[t, ] <- N_mat[t - 1, ] * lambdas_t
+  }
+  
+  # Convert to long format for CI calculation
+  sim_df <- as.data.frame(N_mat)
+  sim_df$year <- years_proj
+  
+  ci <- sim_df %>%
+    pivot_longer(cols = -year, names_to = "sim", values_to = "N") %>%
+    group_by(year) %>%
+    summarise(
+      low  = quantile(N, 0.025),
+      high = quantile(N, 0.975),
+      .groups = "drop"
+    )
+  
+  # Compare with real observed abundance in late period
+  compare <- df_late %>%
+    left_join(ci, by = "year") %>%
+    mutate(
+      in_CI = total_n >= low & total_n <= high
+    )
+  
+  list(
+    sp      = sp,
+    ci      = ci,
+    compare = compare,
+    df_late = df_late,
+    sims    = sim_df
+  )
+}
+
+# Run simulation for each selected species
+sim_results <- selected_species %>% map(simulate_growth)
+
+# Count interceptions (only years beyond 2000, not including 2000 itself)
+for (res in sim_results) {
+  cat("\n============================================\n")
+  cat("Species:", res$sp, "\n")
+  compare_post2000 <- res$compare %>% filter(year > 2000)
+  inside <- sum(compare_post2000$in_CI, na.rm = TRUE)
+  total  <- nrow(compare_post2000)
+  cat("Real abundance inside 95% CI (years > 2000):", inside, "out of", total, "\n")
+}
+
+
+# Add this after running simulations:
+for (res in sim_results) {
+  
+  p <- ggplot() +
+    geom_ribbon(data = res$ci, 
+                aes(x = year, ymin = low, ymax = high), 
+                fill = "lightblue", alpha = 0.4) +
+    geom_line(data = res$df_late, 
+              aes(x = year, y = total_n), 
+              color = "black", size = 1.2) +
+    geom_point(data = res$compare, 
+               aes(x = year, y = total_n, color = in_CI), 
+               size = 3) +
+    scale_color_manual(values = c("TRUE" = "darkgreen", "FALSE" = "red")) +
+    theme_minimal() +
+    labs(title = paste("Population Simulation 95% CI –", res$sp),
+         y = "Abundance", x = "Year")
+  
+  print(p)
+}
+```
+
 ## 2.1 Does the sampling assigned to your group reach the asymptote of the species accumulation curve? Discuss results.
 
 ```{r}
