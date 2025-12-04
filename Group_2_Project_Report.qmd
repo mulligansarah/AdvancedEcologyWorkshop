@@ -337,13 +337,69 @@ In a density-independent model, lambda is constant. However, in a density-depend
 ## 1.3 Starting with the average abundance in 2000, perform a simulation (N = 100 replicates) of population growth using the growth variability based on the abundance values from start to 1999... How many times are the real abundance values intercepted by the uncertainty bounds of the simulation? Briefly discuss the performance of the models and potential reasons for the results.
 
 ```{r}
-library(lubridate)
-data$date <- as.Date(data$date)
-data$year <- format(data$date, "%Y") %>% as.numeric()
 
-annual <- data %>%
+#Merging prep
+df <- data 
+
+df$date <- as.Date(df$date)
+df$year <- format(df$date, "%Y") %>% as.numeric()
+annual <- df %>%
   group_by(species, year) %>%
   summarise(total_n = sum(n), .groups = "drop")
+
+#-----------------------------------------------------------
+# Identify 10 most abundant species
+#-----------------------------------------------------------
+top10 <- annual %>%
+  group_by(species) %>%
+  summarise(total = sum(total_n)) %>%
+  arrange(desc(total)) %>%
+  slice_head(n = 10)
+
+top10_species <- top10$species
+top10_species
+
+selected_species <- top10_species[1:3]
+selected_species
+
+#-----------------------------------------------------------
+# Function to fit density-independent and density-dependent models
+#-----------------------------------------------------------
+fit_models <- function(df_sp) {
+  
+  df_sp <- df_sp %>% arrange(year)
+  
+  # Remove zeros to avoid log problems
+  df_sp <- df_sp %>% filter(total_n > 0)
+  
+  # Compute growth rate
+  df_sp <- df_sp %>%
+    mutate(Nt = total_n,
+           Nt1 = lead(Nt),
+           lambda = Nt1 / Nt,
+           logR = log(lambda))
+  
+  df_sp <- df_sp %>% filter(!is.na(logR))
+  
+  # Density-independent model (exponential)
+  m1 <- lm(logR ~ 1, data = df_sp)
+  
+  # Density-dependent model (Ricker)
+  m2 <- lm(logR ~ Nt, data = df_sp)
+  
+  out <- list(data = df_sp,
+              m1 = m1,
+              m2 = m2,
+              AIC1 = AIC(m1),
+              AIC2 = AIC(m2))
+  
+  return(out)
+}
+
+#-----------------------------------------------------------
+#########################################
+# 1.3 Simulation using λ variability
+#########################################
 
 simulate_growth <- function(sp, start_year = 2000, n_sims = 100) {
   
@@ -432,7 +488,7 @@ simulate_growth <- function(sp, start_year = 2000, n_sims = 100) {
 }
 
 # Run simulation for each selected species
-sim_results <- top3species %>% map(simulate_growth)
+sim_results <- selected_species %>% map(simulate_growth)
 
 # Count interceptions (only years beyond 2000, not including 2000 itself)
 for (res in sim_results) {
@@ -465,7 +521,14 @@ for (res in sim_results) {
   
   print(p)
 }
+
 ```
+## For Black Drum and Spotted Seatrout, the stochastic model based on the pre-2000 λ distribution performed “well” in terms of statistical coverage: the observed abundance fell within the 95% simulation intervals in all post-2000 years (18/18). However, the prediction envelopes for these species became extremely wide and reached biologically unrealistic values (on the order of 10¹²–10¹⁴ individuals), while the observed abundances remained very low. This suggests that the empirically estimated λ distribution from 1980–1999 is highly variable and right-skewed, possibly driven by a few strong recruitment or catch events in the nekton monitoring data. When those rare, high λ values are repeatedly sampled in the simulations, the model produces explosive population growth that is not realized in the actual time series. It seems like the model has good nominal coverage but poor biological realism which may indicate that a simple density-independent stochastic model is not an adequate description of the underlying dynamics for these species.
+
+##For Gizzard Shad, the model captured the observed data less well: only 11 out of 17 post-2000 years (~65%) fell within the 95% confidence interval, and the simulations tended to overestimate abundance after about 2005. This pattern implies a mismatch between the pre-2000 growth regime and the post-2000 dynamics. Possible explanations may be a real decline in Gizzard Shad abundance driven by changes in environmental conditions (e.g., flow, salinity, habitat quality) or increased mortality, shifts in spatial distribution among basins, or changes in catchability in the monthly trawl/gill-net surveys. All of these would violate the model’s assumption that the λ distribution from 1980–1999 is stationary through time.
+
+##Our models were useful but using the historical λ distribution does a reasonable job of capturing interannual variability and uncertainty, but ignoring density dependence, environmental drivers, and changes in sampling or habitat across the Louisiana nekton monitoring program can lead to unrealistic projections and biased expectations of future abundance.
+
 
 ## 2.1 Does the sampling assigned to your group reach the asymptote of the species accumulation curve? Discuss results.
 
@@ -617,3 +680,4 @@ legend("bottomleft", col=c("black","red", "blue", 'lightblue3', 'purple', 'pink'
 ```
 
 (Answer)
+
