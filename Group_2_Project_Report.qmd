@@ -1,6 +1,6 @@
 ---
 title: "Group 2 Project Report"
-format: html
+format: pdf
 editor: visual
 author: Danni Cox, Sophia Hemsi, Sarah Mulligan
 ---
