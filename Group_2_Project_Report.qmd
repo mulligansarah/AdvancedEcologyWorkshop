@@ -337,6 +337,14 @@ In a density-independent model, lambda is constant. However, in a density-depend
 ## 1.3 Starting with the average abundance in 2000, perform a simulation (N = 100 replicates) of population growth using the growth variability based on the abundance values from start to 1999... How many times are the real abundance values intercepted by the uncertainty bounds of the simulation? Briefly discuss the performance of the models and potential reasons for the results.
 
 ```{r}
+library(lubridate)
+data$date <- as.Date(data$date)
+data$year <- format(data$date, "%Y") %>% as.numeric()
+
+annual <- data %>%
+  group_by(species, year) %>%
+  summarise(total_n = sum(n), .groups = "drop")
+
 simulate_growth <- function(sp, start_year = 2000, n_sims = 100) {
   
   # Species-specific time series
@@ -424,7 +432,7 @@ simulate_growth <- function(sp, start_year = 2000, n_sims = 100) {
 }
 
 # Run simulation for each selected species
-sim_results <- selected_species %>% map(simulate_growth)
+sim_results <- top3species %>% map(simulate_growth)
 
 # Count interceptions (only years beyond 2000, not including 2000 itself)
 for (res in sim_results) {
